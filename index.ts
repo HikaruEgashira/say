@@ -127,7 +127,7 @@ async function hookStop(): Promise<void> {
 async function hookInstall(): Promise<void> {
   // コンパイル済みバイナリは /$bunfs/root に展開されるため、mise 経由で呼び出す
   const bin = process.argv[0];
-  const hookCommand = bin.startsWith("/$bunfs/") ? "mise exec -- say" : bin;
+  const hookCommand = bin.startsWith("/$bunfs/") ? "mise exec -- say hook" : `${bin} hook`;
 
   const settingsPath = join(homedir(), ".claude", "settings.json");
   let settings: Record<string, unknown>;
@@ -141,9 +141,11 @@ async function hookInstall(): Promise<void> {
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
   const stopHooks = (Array.isArray(hooks.Stop) ? hooks.Stop : []) as Array<{ hooks: Array<{ type: string; command: string; async?: boolean }> }>;
 
-  // 既存エントリの重複チェック
+  // 既存エントリの重複チェック（say 関連コマンドをすべて対象）
+  const isSayCommand = (cmd: string) =>
+    cmd === hookCommand || cmd.includes("say") || cmd.startsWith("/$bunfs/");
   const alreadyExists = stopHooks.some((group) =>
-    group.hooks?.some((h) => h.command === hookCommand)
+    group.hooks?.some((h) => isSayCommand(h.command))
   );
   if (alreadyExists) {
     console.log("すでにインストール済みです。");
@@ -167,17 +169,17 @@ const args = process.argv.slice(2);
 
 if (args[0] === "--check") {
   check();
-} else if (args[0] === "hook") {
+} else if (args[0] === "hook" && args[1] === "install") {
   await hookInstall();
-} else if (!process.stdin.isTTY) {
-  // TTY なし = パイプ/hook経由 → Stop hook モード
+} else if (args[0] === "hook") {
+  // Claude Code Stop hook から呼ばれる明示的エントリポイント
   await hookStop();
 } else {
   const text = args.join(" ");
   if (!text) {
     console.error("Usage: say <text>");
     console.error("       say --check");
-    console.error("       say hook");
+    console.error("       say hook install");
     process.exit(1);
   }
   await speak(text);
