@@ -16,7 +16,7 @@ jobs:
 
       - run: bun install
 
-      - run: bun build index.ts --outfile=say.js
+      - run: bun build index.ts --outfile=say.js --target=bun
 
       - name: Create wrapper script
         run: |
