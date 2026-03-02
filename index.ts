@@ -125,8 +125,9 @@ async function hookStop(): Promise<void> {
 
 // ~/.claude/settings.json の Stop hooks に say --hook を追加する
 async function hookInstall(): Promise<void> {
-  const sayBin = join(import.meta.dir, "say");
-  const hookCommand = sayBin;
+  // コンパイル済みバイナリは /$bunfs/root に展開されるため、mise 経由で呼び出す
+  const bin = process.argv[0];
+  const hookCommand = bin.startsWith("/$bunfs/") ? "mise exec -- say" : bin;
 
   const settingsPath = join(homedir(), ".claude", "settings.json");
   let settings: Record<string, unknown>;
