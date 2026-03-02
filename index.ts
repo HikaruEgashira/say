@@ -1,8 +1,8 @@
 import { ElevenLabsClient } from "elevenlabs";
-import { writeFile } from "fs/promises";
+import { writeFile, readFile } from "fs/promises";
 import { execSync } from "child_process";
 import { join } from "path";
-import { tmpdir } from "os";
+import { tmpdir, homedir } from "os";
 
 function getApiKey(): string {
   try {
@@ -104,15 +104,79 @@ function check(): void {
   process.exit(allOk ? 0 : 1);
 }
 
+// Claude Code Stop hook: stdinのJSONからlast_assistant_messageの先頭行を読んで発話
+async function hookStop(): Promise<void> {
+  const input = await Bun.stdin.text();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(input);
+  } catch {
+    process.exit(0);
+  }
+
+  if (data.stop_hook_active) process.exit(0);
+
+  const message = typeof data.last_assistant_message === "string" ? data.last_assistant_message : "";
+  const firstLine = message.split("\n").map((l) => l.trim()).find((l) => l.length > 0);
+  if (!firstLine) process.exit(0);
+
+  await speak(firstLine);
+}
+
+// ~/.claude/settings.json の Stop hooks に say --hook を追加する
+async function hookInstall(): Promise<void> {
+  const sayBin = join(import.meta.dir, "say");
+  const hookCommand = sayBin;
+
+  const settingsPath = join(homedir(), ".claude", "settings.json");
+  let settings: Record<string, unknown>;
+  try {
+    settings = JSON.parse(await readFile(settingsPath, "utf-8"));
+  } catch {
+    console.error(`settings.json が読み込めませんでした: ${settingsPath}`);
+    process.exit(1);
+  }
+
+  const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
+  const stopHooks = (Array.isArray(hooks.Stop) ? hooks.Stop : []) as Array<{ hooks: Array<{ type: string; command: string; async?: boolean }> }>;
+
+  // 既存エントリの重複チェック
+  const alreadyExists = stopHooks.some((group) =>
+    group.hooks?.some((h) => h.command === hookCommand)
+  );
+  if (alreadyExists) {
+    console.log("すでにインストール済みです。");
+    process.exit(0);
+  }
+
+  // 既存グループがあれば追加、なければ新規グループ作成
+  if (stopHooks.length > 0) {
+    stopHooks[0].hooks.push({ type: "command", command: hookCommand, async: true });
+  } else {
+    stopHooks.push({ hooks: [{ type: "command", command: hookCommand, async: true }] });
+  }
+
+  hooks.Stop = stopHooks;
+  settings.hooks = hooks;
+  await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+  console.log(`インストール完了: ${hookCommand}`);
+}
+
 const args = process.argv.slice(2);
 
 if (args[0] === "--check") {
   check();
+} else if (args[0] === "hook") {
+  await hookInstall();
+} else if (!process.stdin.isTTY) {
+  // TTY なし = パイプ/hook経由 → Stop hook モード
+  await hookStop();
 } else {
   const text = args.join(" ");
   if (!text) {
     console.error("Usage: say <text>");
     console.error("       say --check");
+    console.error("       say hook");
     process.exit(1);
   }
   await speak(text);
