@@ -42,14 +42,24 @@ async function speak(text: string): Promise<void> {
     chunks.push(Buffer.from(chunk));
   }
 
-  const outPath = join(tmpdir(), `say-${Date.now()}.mp3`);
+  const tmpBase = process.env.TMPDIR ?? tmpdir();
+  const outPath = join(tmpBase, `say-${Date.now()}.mp3`);
   await writeFile(outPath, Buffer.concat(chunks));
 
-  try {
-    execSync(`afplay "${outPath}"`, { stdio: "inherit" });
-  } catch {
-    execSync(`mpg123 "${outPath}"`, { stdio: "inherit" });
+  const players = [
+    `afplay "${outPath}"`,
+    `open -W -a "QuickTime Player" "${outPath}"`,
+    `mpg123 "${outPath}"`,
+  ];
+  let played = false;
+  for (const cmd of players) {
+    try {
+      execSync(cmd, { stdio: "pipe" });
+      played = true;
+      break;
+    } catch {}
   }
+  if (!played) throw new Error("No audio player succeeded");
 }
 
 function check(): void {
