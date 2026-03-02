@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec bun run /Users/hikae/ghq/github.com/HikaruEgashira/say/index.ts "$@"
+exec bun run "$(dirname "$0")/index.ts" "$@"
