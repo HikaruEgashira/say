@@ -7,7 +7,20 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: bun-darwin-arm64
+            suffix: darwin-arm64
+          - os: macos-latest
+            target: bun-darwin-x64
+            suffix: darwin-x64
+          - os: ubuntu-latest
+            target: bun-linux-x64
+            suffix: linux-x64
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -16,26 +29,15 @@ jobs:
 
       - run: bun install
 
-      - run: bun build index.ts --outfile=say.js --target=bun
+      - run: bun build --compile --target=${{ matrix.target }} --outfile=say index.ts
 
-      - name: Create wrapper script
-        run: |
-          cat > say << 'EOF'
-          #!/bin/sh
-          exec bun "$(dirname "$0")/say.js" "$@"
-          EOF
-          chmod +x say
-
-      - name: Archive for each platform
-        run: |
-          for suffix in darwin-arm64 darwin-x64 linux-x64; do
-            tar czf say-${{ github.ref_name }}-${suffix}.tar.gz say say.js
-          done
+      - name: Archive
+        run: tar czf say-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz say
 
       - uses: actions/upload-artifact@v4
         with:
-          name: say-bundles
-          path: say-${{ github.ref_name }}-*.tar.gz
+          name: say-${{ matrix.suffix }}
+          path: say-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz
 
   release:
     needs: build
