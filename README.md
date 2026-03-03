@@ -2,7 +2,7 @@
 
 A CLI that replaces the system `say` command using [ElevenLabs](https://elevenlabs.io) V3 Text-to-Speech.
 
-![demo](demo.mp4)
+demo: https://screen.studio/share/sl41XjhC?state=uploading
 
 ## Install
 
