@@ -136,28 +136,31 @@ async function hookInstall(): Promise<void> {
   const hooks = (settings.hooks ?? {}) as Record<string, unknown>;
   const stopHooks = (Array.isArray(hooks.Stop) ? hooks.Stop : []) as Array<{ hooks: Array<{ type: string; command: string; async?: boolean }> }>;
 
-  // 既存エントリの重複チェック（say 関連コマンドをすべて対象）
   const isSayCommand = (cmd: string) =>
-    cmd === hookCommand || cmd.includes("say") || cmd.startsWith("/$bunfs/");
-  const alreadyExists = stopHooks.some((group) =>
-    group.hooks?.some((h) => isSayCommand(h.command))
-  );
-  if (alreadyExists) {
-    console.log("すでにインストール済みです。");
-    process.exit(0);
-  }
+    cmd.includes("say hook") || cmd.startsWith("/$bunfs/");
 
-  // 既存グループがあれば追加、なければ新規グループ作成
-  if (stopHooks.length > 0) {
-    stopHooks[0].hooks.push({ type: "command", command: hookCommand, async: true });
-  } else {
-    stopHooks.push({ hooks: [{ type: "command", command: hookCommand, async: true }] });
+  // 既存エントリがあればコマンドを上書き更新、なければ追加
+  let updated = false;
+  for (const group of stopHooks) {
+    for (const h of group.hooks ?? []) {
+      if (isSayCommand(h.command)) {
+        h.command = hookCommand;
+        updated = true;
+      }
+    }
+  }
+  if (!updated) {
+    if (stopHooks.length > 0) {
+      stopHooks[0].hooks.push({ type: "command", command: hookCommand, async: true });
+    } else {
+      stopHooks.push({ hooks: [{ type: "command", command: hookCommand, async: true }] });
+    }
   }
 
   hooks.Stop = stopHooks;
   settings.hooks = hooks;
   await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-  console.log(`インストール完了: ${hookCommand}`);
+  console.log(`${updated ? "更新" : "インストール"}完了: ${hookCommand}`);
 }
 
 const args = process.argv.slice(2);
