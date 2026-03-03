@@ -88,12 +88,6 @@ function check(): void {
     detail: (() => { try { return execSync("which afplay", { stdio: "pipe" }).toString().trim(); } catch { return "not found"; } })(),
   });
 
-  results.push({
-    label: "mise say",
-    ok: (() => { try { execSync("mise list | grep say", { stdio: "pipe" }); return true; } catch { return false; } })(),
-    detail: (() => { try { return execSync("mise list | grep say", { stdio: "pipe" }).toString().trim() || "not found"; } catch { return "not found"; } })(),
-  });
-
   let allOk = true;
   for (const r of results) {
     const icon = r.ok ? "✓" : "✗";
@@ -125,9 +119,10 @@ async function hookStop(): Promise<void> {
 
 // ~/.claude/settings.json の Stop hooks に say --hook を追加する
 async function hookInstall(): Promise<void> {
-  // コンパイル済みバイナリは /$bunfs/root に展開されるため、mise 経由で呼び出す
+  // コンパイル済みバイナリは /$bunfs/root に展開されるため process.execPath で実パスを取得する。
   const bin = process.argv[0];
-  const hookCommand = bin.startsWith("/$bunfs/") ? "mise exec -- say hook" : `${bin} hook`;
+  const resolvedBin = bin.startsWith("/$bunfs/") ? process.execPath : bin;
+  const hookCommand = `${resolvedBin} hook`;
 
   const settingsPath = join(homedir(), ".claude", "settings.json");
   let settings: Record<string, unknown>;
