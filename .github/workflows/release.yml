@@ -29,7 +29,7 @@ jobs:
 
       - run: bun install
 
-      - run: bun build --compile --target=${{ matrix.target }} --outfile=say index.ts
+      - run: bun build --compile --target=${{ matrix.target }} --define __VERSION__='"${{ github.ref_name }}"' --outfile=say index.ts
 
       - name: Archive
         run: tar czf say-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz say

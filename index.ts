@@ -4,6 +4,10 @@ import { execSync } from "child_process";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
 
+/** bun build --define で埋め込まれるバージョン文字列。未定義時は dev */
+declare const __VERSION__: string;
+const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
+
 // Claude Code settings.json のスキーマ
 // https://docs.anthropic.com/en/docs/claude-code/hooks
 
@@ -186,7 +190,9 @@ async function hookInstall(): Promise<void> {
 
 const args = process.argv.slice(2);
 
-if (args[0] === "check") {
+if (args[0] === "version") {
+  console.log(VERSION);
+} else if (args[0] === "check") {
   check();
 } else if (args[0] === "hook" && args[1] === "install") {
   await hookInstall();
@@ -196,6 +202,7 @@ if (args[0] === "check") {
   const text = args.join(" ");
   if (!text) {
     console.error("Usage: say <text>");
+    console.error("       say version");
     console.error("       say check");
     console.error("       say hook install");
     process.exit(1);
