@@ -119,10 +119,8 @@ async function hookStop(): Promise<void> {
 
 // ~/.claude/settings.json の Stop hooks に say --hook を追加する
 async function hookInstall(): Promise<void> {
-  // コンパイル済みバイナリは /$bunfs/root に展開されるため process.execPath で実パスを取得する。
-  const bin = process.argv[0];
-  const resolvedBin = bin.startsWith("/$bunfs/") ? process.execPath : bin;
-  const hookCommand = `${resolvedBin} hook`;
+  // process.execPath はコンパイル済みバイナリの実パスを返す。
+  const hookCommand = `${process.execPath} hook`;
 
   const settingsPath = join(homedir(), ".claude", "settings.json");
   let settings: Record<string, unknown>;
