@@ -23,6 +23,8 @@ Set the following environment variables (e.g. in `.env`):
 | `ELEVENLABS_API_KEY` | ✅ | ElevenLabs API key |
 | `ELEVENLABS_VOICE_ID` | — | Voice ID (default: `JBFqnCBsd6RMkjVDRZzb`) |
 | `ELEVENLABS_SPEED` | — | Speech speed multiplier (default: `1.3`) |
+| `SAY_MAX_CHARS` | — | Max characters sent to TTS (default: `200`) |
+| `SAY_MAX_SECONDS` | — | Max playback duration in seconds (default: `30`) |
 
 ## Usage
 
