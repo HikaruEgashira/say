@@ -1,6 +1,5 @@
 import { ElevenLabsClient } from "elevenlabs";
 import { writeFile, readFile } from "fs/promises";
-import { execSync } from "child_process";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
 
@@ -61,7 +60,14 @@ function getApiKey(): string {
   process.exit(1);
 }
 
+const DEFAULT_MAX_CHARS = 200;
+const DEFAULT_MAX_SECONDS = 30;
+
 async function speak(text: string): Promise<void> {
+  const maxChars = process.env.SAY_MAX_CHARS ? parseInt(process.env.SAY_MAX_CHARS, 10) : DEFAULT_MAX_CHARS;
+  const maxSeconds = process.env.SAY_MAX_SECONDS ? parseFloat(process.env.SAY_MAX_SECONDS) : DEFAULT_MAX_SECONDS;
+  const truncated = text.length > maxChars ? text.slice(0, maxChars) : text;
+
   const apiKey = getApiKey();
 
   const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
@@ -69,7 +75,7 @@ async function speak(text: string): Promise<void> {
 
   const speed = process.env.ELEVENLABS_SPEED ? parseFloat(process.env.ELEVENLABS_SPEED) : 1.3;
   const audio = await client.textToSpeech.convert(voiceId, {
-    text,
+    text: truncated,
     model_id: "eleven_v3",
     output_format: "mp3_44100_128",
     voice_settings: { speed },
@@ -83,7 +89,10 @@ async function speak(text: string): Promise<void> {
   const outPath = join(tmpdir(), `say-${Date.now()}.mp3`);
   await writeFile(outPath, Buffer.concat(chunks));
 
-  execSync(`afplay "${outPath}"`, { stdio: "pipe" });
+  const proc = Bun.spawn(["afplay", outPath], { stdout: "pipe", stderr: "pipe" });
+  const timer = setTimeout(() => proc.kill(), maxSeconds * 1000);
+  await proc.exited;
+  clearTimeout(timer);
 }
 
 function check(): void {
