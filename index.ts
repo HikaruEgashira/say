@@ -64,7 +64,7 @@ const DEFAULT_MAX_CHARS = 200;
 const DEFAULT_MAX_SECONDS = 30;
 
 function sayFallback(message: string): void {
-  Bun.spawnSync(["/usr/bin/say", "-v", "Samantha", message], { stderr: "pipe" });
+  Bun.spawnSync(["/usr/bin/say", message], { stderr: "pipe" });
 }
 
 async function extractErrorMessage(e: unknown): Promise<string> {
@@ -112,8 +112,8 @@ async function speak(text: string): Promise<void> {
   } catch (e) {
     const msg = await extractErrorMessage(e);
     console.error(msg);
-    sayFallback(msg);
-    process.exit(1);
+    sayFallback(truncated);
+    return;
   }
 
   const chunks: Buffer[] = [];
