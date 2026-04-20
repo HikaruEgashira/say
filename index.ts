@@ -63,6 +63,32 @@ function getApiKey(): string {
 const DEFAULT_MAX_CHARS = 200;
 const DEFAULT_MAX_SECONDS = 30;
 
+function sayFallback(message: string): void {
+  Bun.spawnSync(["/usr/bin/say", message], { stderr: "pipe" });
+}
+
+async function extractErrorMessage(e: unknown): Promise<string> {
+  let body = (e as { body?: unknown })?.body;
+  if (body instanceof ReadableStream) {
+    try {
+      body = await new Response(body).json();
+    } catch {
+      body = undefined;
+    }
+  }
+  if (body && typeof body === "object") {
+    const detail = (body as { detail?: unknown }).detail;
+    if (detail && typeof detail === "object") {
+      const status = (detail as { status?: unknown }).status;
+      if (status === "quota_exceeded") return "ElevenLabs quota exceeded";
+      if (typeof status === "string") return `ElevenLabs ${status.replace(/_/g, " ")}`;
+    }
+  }
+  const statusCode = (e as { statusCode?: unknown }).statusCode;
+  if (statusCode === 401) return "ElevenLabs authentication failed";
+  return "ElevenLabs request failed";
+}
+
 async function speak(text: string): Promise<void> {
   const maxChars = process.env.SAY_MAX_CHARS ? parseInt(process.env.SAY_MAX_CHARS, 10) : DEFAULT_MAX_CHARS;
   const maxSeconds = process.env.SAY_MAX_SECONDS ? parseFloat(process.env.SAY_MAX_SECONDS) : DEFAULT_MAX_SECONDS;
@@ -74,12 +100,21 @@ async function speak(text: string): Promise<void> {
   const client = new ElevenLabsClient({ apiKey });
 
   const speed = process.env.ELEVENLABS_SPEED ? parseFloat(process.env.ELEVENLABS_SPEED) : 1.3;
-  const audio = await client.textToSpeech.convert(voiceId, {
-    text: truncated,
-    model_id: "eleven_v3",
-    output_format: "mp3_44100_128",
-    voice_settings: { speed },
-  });
+
+  let audio;
+  try {
+    audio = await client.textToSpeech.convert(voiceId, {
+      text: truncated,
+      model_id: "eleven_v3",
+      output_format: "mp3_44100_128",
+      voice_settings: { speed },
+    });
+  } catch (e) {
+    const msg = await extractErrorMessage(e);
+    console.error(msg);
+    sayFallback(msg);
+    process.exit(1);
+  }
 
   const chunks: Buffer[] = [];
   for await (const chunk of audio) {
