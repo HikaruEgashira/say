@@ -101,14 +101,21 @@ async function speak(text: string): Promise<void> {
 
   const speed = process.env.ELEVENLABS_SPEED ? parseFloat(process.env.ELEVENLABS_SPEED) : 1.3;
 
-  let audio;
+  // ElevenLabs の API 呼び出しからストリーム読み取りまでを1つの try で包み、
+  // いずれのタイミングで失敗しても /usr/bin/say にフォールバックする
+  let audioBuffer: Buffer;
   try {
-    audio = await client.textToSpeech.convert(voiceId, {
+    const audio = await client.textToSpeech.convert(voiceId, {
       text: truncated,
       model_id: "eleven_v3",
       output_format: "mp3_44100_128",
       voice_settings: { speed },
     });
+    const chunks: Buffer[] = [];
+    for await (const chunk of audio) {
+      chunks.push(Buffer.from(chunk));
+    }
+    audioBuffer = Buffer.concat(chunks);
   } catch (e) {
     const msg = await extractErrorMessage(e);
     console.error(msg);
@@ -116,13 +123,8 @@ async function speak(text: string): Promise<void> {
     return;
   }
 
-  const chunks: Buffer[] = [];
-  for await (const chunk of audio) {
-    chunks.push(Buffer.from(chunk));
-  }
-
   const outPath = join(tmpdir(), `say-${Date.now()}.mp3`);
-  await writeFile(outPath, Buffer.concat(chunks));
+  await writeFile(outPath, audioBuffer);
 
   const proc = Bun.spawn(["afplay", outPath], { stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => proc.kill(), maxSeconds * 1000);
@@ -188,52 +190,121 @@ async function hookStop(): Promise<void> {
   await speak(firstLine);
 }
 
-// ~/.claude/settings.json の Stop hooks に say hook を追加する
-async function hookInstall(): Promise<void> {
-  const hookCommand = `${process.execPath} hook`;
+// say hook として登録された HookEntry かを判定する
+// 実行ファイルのパスは bun build や mise の構成で変わるため、任意のパスの say バイナリを検出する
+function isSayHookCommand(cmd: string): boolean {
+  return /(^|\/)say\s+hook(\s|$)/.test(cmd);
+}
 
+async function loadSettings(): Promise<{ settings: ClaudeSettings; path: string }> {
   const settingsPath = join(homedir(), ".claude", "settings.json");
   const settingsText = await readFile(settingsPath, "utf-8").catch(() => null);
   if (settingsText === null) {
     console.error(`settings.json が読み込めませんでした: ${settingsPath}`);
     process.exit(1);
   }
-
-  let settings: ClaudeSettings;
   try {
-    settings = JSON.parse(settingsText) as ClaudeSettings;
+    return { settings: JSON.parse(settingsText) as ClaudeSettings, path: settingsPath };
   } catch (e) {
     console.error(`settings.json のパースに失敗しました: ${e}`);
     process.exit(1);
   }
+}
 
+async function saveSettings(path: string, settings: ClaudeSettings): Promise<void> {
+  await writeFile(path, JSON.stringify(settings, null, 2) + "\n", "utf-8");
+}
+
+// ~/.claude/settings.json の Stop hooks に say hook を追加する
+async function hookInstall(): Promise<void> {
+  const hookCommand = `${process.execPath} hook`;
+  const { settings, path } = await loadSettings();
   const stopHooks: HookGroup[] = settings.hooks?.Stop ?? [];
 
-  const isSayCommand = (cmd: string) =>
-    cmd.includes("say hook") || cmd.startsWith("/$bunfs/");
-
-  let updated = false;
   for (const group of stopHooks) {
     for (const h of group.hooks ?? []) {
-      if (isSayCommand(h.command)) {
-        h.command = hookCommand;
-        updated = true;
+      if (isSayHookCommand(h.command)) {
+        console.log(`既にインストール済みです。更新するには: say hook update`);
+        return;
       }
     }
   }
-  if (!updated) {
-    const newEntry: HookEntry = { type: "command", command: hookCommand, async: true };
-    const firstGroup = stopHooks[0];
-    if (firstGroup !== undefined) {
-      (firstGroup.hooks ??= []).push(newEntry);
-    } else {
-      stopHooks.push({ hooks: [newEntry] });
-    }
+
+  const newEntry: HookEntry = { type: "command", command: hookCommand, async: true };
+  const firstGroup = stopHooks[0];
+  if (firstGroup !== undefined) {
+    (firstGroup.hooks ??= []).push(newEntry);
+  } else {
+    stopHooks.push({ hooks: [newEntry] });
   }
 
   settings.hooks = { ...settings.hooks, Stop: stopHooks };
-  await writeFile(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-  console.log(`${updated ? "更新" : "インストール"}完了: ${hookCommand}`);
+  await saveSettings(path, settings);
+  console.log(`インストール完了: ${hookCommand}`);
+}
+
+// 既存の say hook エントリのコマンドを現在の実行ファイルパスに更新する
+async function hookUpdate(): Promise<void> {
+  const hookCommand = `${process.execPath} hook`;
+  const { settings, path } = await loadSettings();
+  const stopHooks: HookGroup[] = settings.hooks?.Stop ?? [];
+
+  let count = 0;
+  for (const group of stopHooks) {
+    for (const h of group.hooks ?? []) {
+      if (isSayHookCommand(h.command)) {
+        h.command = hookCommand;
+        count++;
+      }
+    }
+  }
+
+  if (count === 0) {
+    console.error("say hook が見つかりませんでした。先に: say hook install");
+    process.exit(1);
+  }
+
+  settings.hooks = { ...settings.hooks, Stop: stopHooks };
+  await saveSettings(path, settings);
+  console.log(`更新完了 (${count}件): ${hookCommand}`);
+}
+
+// settings.json から say hook エントリを全て削除する (過去のインストール残存も含む)
+async function hookUninstall(): Promise<void> {
+  const { settings, path } = await loadSettings();
+  const stopHooks: HookGroup[] = settings.hooks?.Stop ?? [];
+
+  let removed = 0;
+  const cleanedGroups: HookGroup[] = [];
+  for (const group of stopHooks) {
+    const kept = (group.hooks ?? []).filter((h) => {
+      if (isSayHookCommand(h.command)) {
+        removed++;
+        return false;
+      }
+      return true;
+    });
+    // hooks が空になった group は捨てる (matcher のみ残して意味がないため)
+    if (kept.length > 0) {
+      cleanedGroups.push({ ...group, hooks: kept });
+    } else if (group.hooks === undefined) {
+      cleanedGroups.push(group);
+    }
+  }
+
+  if (removed === 0) {
+    console.log("削除対象の say hook はありませんでした");
+    return;
+  }
+
+  if (cleanedGroups.length === 0) {
+    const { Stop: _Stop, ...rest } = settings.hooks ?? {};
+    settings.hooks = rest;
+  } else {
+    settings.hooks = { ...settings.hooks, Stop: cleanedGroups };
+  }
+  await saveSettings(path, settings);
+  console.log(`アンインストール完了 (${removed}件削除)`);
 }
 
 const args = process.argv.slice(2);
@@ -244,6 +315,10 @@ if (args[0] === "version") {
   check();
 } else if (args[0] === "hook" && args[1] === "install") {
   await hookInstall();
+} else if (args[0] === "hook" && args[1] === "update") {
+  await hookUpdate();
+} else if (args[0] === "hook" && args[1] === "uninstall") {
+  await hookUninstall();
 } else if (args[0] === "hook") {
   await hookStop();
 } else {
@@ -253,6 +328,8 @@ if (args[0] === "version") {
     console.error("       say version");
     console.error("       say check");
     console.error("       say hook install");
+    console.error("       say hook update");
+    console.error("       say hook uninstall");
     process.exit(1);
   }
   await speak(text);
