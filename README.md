@@ -16,15 +16,20 @@ setup following instruction https://raw.githubusercontent.com/HikaruEgashira/say
 
 ## Configuration
 
-Set the following environment variables (e.g. in `.env`):
+Store your ElevenLabs API key in the macOS Keychain:
 
-| Variable | Required | Description |
-|---|---|---|
-| `ELEVENLABS_API_KEY` | ✅ | ElevenLabs API key |
-| `ELEVENLABS_VOICE_ID` | — | Voice ID (default: `JBFqnCBsd6RMkjVDRZzb`) |
-| `ELEVENLABS_SPEED` | — | Speech speed multiplier (default: `1.3`) |
-| `SAY_MAX_CHARS` | — | Max characters sent to TTS (default: `200`) |
-| `SAY_MAX_SECONDS` | — | Max playback duration in seconds (default: `30`) |
+```bash
+security add-generic-password -a "$USER" -s "elevenlabs-api-key" -W
+```
+
+Optional environment variables:
+
+| Variable | Description |
+|---|---|
+| `ELEVENLABS_VOICE_ID` | Voice ID (default: `JBFqnCBsd6RMkjVDRZzb`) |
+| `ELEVENLABS_SPEED` | Speech speed multiplier (default: `1.3`) |
+| `SAY_MAX_CHARS` | Max characters sent to TTS (default: `200`) |
+| `SAY_MAX_SECONDS` | Max playback duration in seconds (default: `30`) |
 
 ## Usage
 

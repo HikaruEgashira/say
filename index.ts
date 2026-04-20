@@ -1,5 +1,5 @@
 import { ElevenLabsClient } from "elevenlabs";
-import { writeFile, readFile } from "fs/promises";
+import { writeFile, readFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
 
@@ -126,8 +126,12 @@ async function speak(text: string): Promise<void> {
 
   const proc = Bun.spawn(["afplay", outPath], { stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => proc.kill(), maxSeconds * 1000);
-  await proc.exited;
-  clearTimeout(timer);
+  try {
+    await proc.exited;
+  } finally {
+    clearTimeout(timer);
+    await unlink(outPath).catch(() => {});
+  }
 }
 
 function check(): void {
