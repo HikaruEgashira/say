@@ -37,6 +37,19 @@ Optional environment variables:
 say "Hello, world!"
 ```
 
+## Herdr plugin
+
+[`herdr/`](herdr/) is a [Herdr](https://herdr.dev/) plugin that speaks an
+agent's one-line task summary aloud when it reaches `done` or `blocked` — the
+voice counterpart to a push notification when you run several agent panes in
+parallel.
+
+```bash
+herdr plugin install HikaruEgashira/say/herdr
+```
+
+See [herdr/README.md](herdr/README.md) for configuration.
+
 ## License
 
 MIT

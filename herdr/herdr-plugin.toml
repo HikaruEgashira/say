@@ -1,0 +1,20 @@
+id = "hikaruegashira.say"
+name = "Say"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Speak the agent's last line aloud via the say CLI when a Herdr agent finishes or gets blocked."
+platforms = ["macos"]
+
+[[events]]
+on = "pane.agent_status_changed"
+command = ["sh", "say-speak.sh"]
+
+[[actions]]
+id = "dry-run"
+title = "Dry Run"
+command = ["sh", "say-speak.sh", "--dry-run"]
+
+[[actions]]
+id = "test"
+title = "Speak Test Line"
+command = ["sh", "say-speak.sh", "--test"]
