@@ -1,14 +1,16 @@
 # say — Herdr plugin
 
-A [Herdr](https://herdr.dev/) plugin that speaks the agent's last output line
+A [Herdr](https://herdr.dev/) plugin that speaks the agent's first output line
 aloud via the [`say`](../README.md) CLI when an agent reaches `done` or
 `blocked`. It is the voice counterpart to a push notification: with several
 agent panes running in parallel, you hear which one just finished or got stuck
 without watching every pane.
 
-The spoken text is exactly the pane's last non-empty line (ANSI escapes
-stripped). There is no canned phrasing — `say` renders whatever the agent last
-printed, including any ElevenLabs audio tags the agent emitted.
+The standard line selection matches `say hook`: choose the first non-empty
+line from agent output. Herdr uses the agent's one-line OSC title when present;
+if no title is available, it reads the pane and speaks the first non-empty
+content line after stripping terminal escape sequences and chrome. There is no
+canned phrasing — `say` renders whatever the agent emitted.
 
 ## Requirements
 
@@ -36,7 +38,7 @@ $EDITOR "$config_dir/.env"
 |---|---|---|
 | `SAY_BIN` | Path to the `say` binary | `say` |
 | `SAY_STATUSES` | Statuses that trigger speech (space-separated) | `done blocked` |
-| `SAY_LINES` | Recent pane lines scanned for the last non-empty line | `12` |
+| `SAY_LINES` | Recent pane lines scanned for the first non-empty content line | `12` |
 
 ## dry-run
 

@@ -50,17 +50,17 @@ clean_line() {
 }
 
 # Fallback for agents that set no OSC title: reduce raw terminal output to the
-# last speakable *content* line. Done entirely in perl (-CSD) — macOS awk's
+# first speakable *content* line, matching the Claude Code Stop hook standard.
+# Done entirely in perl (-CSD) — macOS awk's
 # multibyte string compare is broken (it reports "実装" == "❯" as true) and BSD
 # sed can't match \e/\a. Strips ANSI/OSC escapes and control bytes, then skips
 # terminal chrome — box borders, the footer hint bar, a bare prompt — so we
 # never voice "auto mode on shift+tab to cycle".
-last_speakable_line() {
+first_speakable_line() {
   printf '%s' "$1" | perl -CSD -e '
     local $/; my $t = <STDIN>;
     $t =~ s/\e\][^\a]*(?:\a|\e\\)//g;
     $t =~ s/\e[@-_][0-?]*[ -\/]*[@-~]//g;
-    my $last = "";
     for my $l (split /\n/, $t) {
       $l =~ s/[\x00-\x1f\x7f]//g;
       $l =~ s/\s+/ /g; $l =~ s/^ //; $l =~ s/ $//;
@@ -68,9 +68,9 @@ last_speakable_line() {
       next if $p eq q{};
       next if $l =~ /^\x{23F5}/;                     # footer hint bar (⏵)
       next if $l eq qq{\x{276F}} || $l eq q{>};      # bare prompt (❯ or >)
-      $last = $l;
+      print $l;
+      exit 0;
     }
-    print $last;
   '
 }
 
@@ -197,7 +197,7 @@ line="$(clean_line "$(first_value \
   "$(json_value HERDR_PLUGIN_CONTEXT_JSON "$context_json" '.title')" \
 )")"
 
-# Fallback for agents with no OSC title: the last content line of the pane.
+# Fallback for agents with no OSC title: the first content line of the pane.
 if [ -z "$line" ]; then
   pane_id="$(first_value \
     "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.pane_id')" \
@@ -208,7 +208,7 @@ if [ -z "$line" ]; then
     herdr_bin="${HERDR_BIN_PATH:-herdr}"
     lines="${SAY_LINES:-12}"
     raw="$("$herdr_bin" pane read "$pane_id" --source recent-unwrapped --lines "$lines" 2>/dev/null || true)"
-    line="$(last_speakable_line "$raw")"
+    line="$(first_speakable_line "$raw")"
   fi
 fi
 
