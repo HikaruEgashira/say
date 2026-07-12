@@ -7,10 +7,17 @@ agent panes running in parallel, you hear which one just finished or got stuck
 without watching every pane.
 
 The standard line selection matches `say hook`: choose the first non-empty
-line from agent output. Herdr uses the agent's one-line OSC title when present;
-if no title is available, it reads the pane and speaks the first non-empty
-content line after stripping terminal escape sequences and chrome. There is no
-canned phrasing — `say` renders whatever the agent emitted.
+line of the agent's final message. Sources, in order:
+
+1. **Pane title** — with the Claude hook installed (see below), a Claude Code
+   Stop hook reports the final message's first line as the herdr pane title:
+   the exact line `say hook` would speak.
+2. **Screen scrape** — for panes with no title, the pane is read and the last
+   ⏺-anchored message head is spoken after stripping terminal escape
+   sequences and chrome. This is best-effort: a long message can scroll its
+   head out of the window, leaving only a tail fragment.
+
+There is no canned phrasing — `say` renders whatever the agent emitted.
 
 ## Requirements
 
@@ -25,6 +32,16 @@ canned phrasing — `say` renders whatever the agent emitted.
 herdr plugin install HikaruEgashira/say/herdr
 ```
 
+For Claude Code panes, also install the Stop hook so speech uses the final
+message's first line instead of screen scraping:
+
+```sh
+herdr plugin action invoke install-claude-hook
+```
+
+This copies `claude-stop-title.sh` to `~/.claude/hooks/herdr-say-title.sh` and
+registers it under `hooks.Stop` in `~/.claude/settings.json` (idempotent).
+
 No `.env` is required — the defaults (`say` on PATH, trigger on `done`/`blocked`)
 work out of the box. Override only if needed:
 
@@ -38,7 +55,7 @@ $EDITOR "$config_dir/.env"
 |---|---|---|
 | `SAY_BIN` | Path to the `say` binary | `say` |
 | `SAY_STATUSES` | Statuses that trigger speech (space-separated) | `done blocked` |
-| `SAY_LINES` | Recent pane lines scanned for the first non-empty content line | `12` |
+| `SAY_LINES` | Recent pane lines scanned by the screen-scrape fallback | `40` |
 
 ## dry-run
 

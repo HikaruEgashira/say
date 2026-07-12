@@ -49,18 +49,21 @@ clean_line() {
     | perl -CSD -pe 's/^\s*[\x{2800}-\x{28FF}]+\s*//; s/\s+/ /g; s/^ //; s/ $//'
 }
 
-# Fallback for agents that set no OSC title: reduce raw terminal output to the
-# first speakable *content* line, matching the Claude Code Stop hook standard.
-# Done entirely in perl (-CSD) — macOS awk's
+# Fallback for panes with no title: reduce raw terminal output to the head of
+# the last agent message, matching the Claude Code Stop hook standard. Done
+# entirely in perl (-CSD) — macOS awk's
 # multibyte string compare is broken (it reports "実装" == "❯" as true) and BSD
-# sed can't match \e/\a. Strips ANSI/OSC escapes and control bytes, then skips
-# terminal chrome — box borders, the footer hint bar, a bare prompt — so we
-# never voice "auto mode on shift+tab to cycle".
+# sed can't match \e/\a. Strips ANSI/OSC escapes and control bytes, drops
+# terminal chrome — box borders, footer, prompts, tool-use/timing/recap lines —
+# then prefers the last ⏺-anchored line: its first visual row is the message
+# head. A window starting mid-message still yields a tail fragment; the
+# claude-stop-title.sh hook path avoids scraping entirely.
 first_speakable_line() {
   printf '%s' "$1" | perl -CSD -e '
     local $/; my $t = <STDIN>;
     $t =~ s/\e\][^\a]*(?:\a|\e\\)//g;
     $t =~ s/\e[@-_][0-?]*[ -\/]*[@-~]//g;
+    my @lines;
     for my $l (split /\n/, $t) {
       $l =~ s/[\x00-\x1f\x7f]//g;
       $l =~ s/\s+/ /g; $l =~ s/^ //; $l =~ s/ $//;
@@ -68,9 +71,24 @@ first_speakable_line() {
       next if $p eq q{};
       next if $l =~ /^\x{23F5}/;                     # footer hint bar (⏵)
       next if $l eq qq{\x{276F}} || $l eq q{>};      # bare prompt (❯ or >)
-      print $l;
-      exit 0;
+      next if $l =~ /^\x{2026} \+\d+ tool use/;      # collapsed "… +4 tool uses"
+      next if $l =~ /^[\x{2700}-\x{27BF}\x{00B7}] /; # spinner/timing "✻ Churned for 41m"
+      next if $l =~ /^[\x{2800}-\x{28FF}]/;          # braille spinner
+      next if $l =~ /^[\x{23BF}\x{2514}\x{23A3}]/;   # tool-result gutter (⎿)
+      next if $l =~ /^\x{203B} recap:/;              # recap banner (※)
+      next if $l =~ /\(disable recaps in \/config\)/;
+      next if $l =~ /^\x{23FA} ?[A-Z]\w+\(/;         # tool call: ⏺ Bash(…)
+      next if $l =~ /^\x{23FA} ?.*\x{2026}$/;        # transient: ⏺ Running…
+      push @lines, $l;
     }
+    exit 0 unless @lines;
+    for my $i (reverse 0 .. $#lines) {
+      if ($lines[$i] =~ /^\x{23FA} ?(.+)/) {         # last agent message (⏺)
+        print $1;
+        exit 0;
+      }
+    }
+    print $lines[0];
   '
 }
 
@@ -92,7 +110,7 @@ dry_run() {
   ok=1
   say_bin="${SAY_BIN:-say}"
   statuses="${SAY_STATUSES:-done blocked}"
-  lines="${SAY_LINES:-12}"
+  lines="${SAY_LINES:-40}"
 
   echo "Say plugin dry-run"
   echo
@@ -113,6 +131,13 @@ dry_run() {
 
   echo "SAY_STATUSES: $statuses"
   echo "SAY_LINES: $lines"
+
+  hook_path="$HOME/.claude/hooks/herdr-say-title.sh"
+  if [ -f "$hook_path" ]; then
+    echo "claude Stop hook: ok ($hook_path)"
+  else
+    echo "claude Stop hook: not installed (run the Install Claude Hook action for exact first-line speech)"
+  fi
 
   echo
   echo "Sample spoken line:"
@@ -157,8 +182,57 @@ test_speak() {
   return 1
 }
 
+# Copy claude-stop-title.sh next to herdr's own claude integration hook and
+# register it as a Claude Code Stop hook. Idempotent.
+install_claude_hook() {
+  src="${HERDR_PLUGIN_ROOT:-.}/claude-stop-title.sh"
+  hook_path="$HOME/.claude/hooks/herdr-say-title.sh"
+  settings="$HOME/.claude/settings.json"
+
+  if ! command_exists jq; then
+    echo "jq is required"
+    return 1
+  fi
+  if [ ! -f "$src" ]; then
+    echo "claude-stop-title.sh not found: $src"
+    return 1
+  fi
+
+  mkdir -p "$HOME/.claude/hooks"
+  cp "$src" "$hook_path"
+  chmod +x "$hook_path"
+  echo "installed: $hook_path"
+
+  cmd="sh '$hook_path'"
+  [ -f "$settings" ] || printf '{}\n' > "$settings"
+  if jq -e --arg cmd "$cmd" \
+    '.hooks.Stop[]?.hooks[]? | select(.command == $cmd)' \
+    "$settings" >/dev/null 2>&1; then
+    echo "Stop hook already registered in $settings"
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  if jq --arg cmd "$cmd" \
+    '.hooks.Stop = ((.hooks.Stop // []) + [{matcher: "*", hooks: [{type: "command", command: $cmd, async: true}]}])' \
+    "$settings" > "$tmp"; then
+    mv "$tmp" "$settings"
+    echo "registered Stop hook in $settings"
+  else
+    rm -f "$tmp"
+    echo "failed to update $settings"
+    return 1
+  fi
+}
+
 if [ "${1:-}" = "--dry-run" ]; then
   dry_run
+  exit $?
+fi
+
+if [ "${1:-}" = "--install-claude-hook" ]; then
+  load_env
+  install_claude_hook
   exit $?
 fi
 
@@ -190,26 +264,39 @@ for s in $statuses; do
 done
 [ "$matched" -eq 1 ] || exit 0
 
-# Primary source: the OSC title the agent set — its own one-line task summary
-# (e.g. "herdr plugin を実装する"). This is what pane.agent_status_changed carries.
+# Primary source: the pane title — for Claude panes, claude-stop-title.sh
+# reports the final message's first line here, the exact line `say hook`
+# would speak. This is what pane.agent_status_changed carries.
 line="$(clean_line "$(first_value \
   "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.title')" \
   "$(json_value HERDR_PLUGIN_CONTEXT_JSON "$context_json" '.title')" \
 )")"
 
-# Fallback for agents with no OSC title: the first content line of the pane.
-if [ -z "$line" ]; then
-  pane_id="$(first_value \
-    "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.pane_id')" \
-    "$(json_value HERDR_PLUGIN_CONTEXT_JSON "$context_json" '.pane_id')" \
-    "${HERDR_PANE_ID:-}" \
-  )"
-  if [ -n "$pane_id" ]; then
-    herdr_bin="${HERDR_BIN_PATH:-herdr}"
-    lines="${SAY_LINES:-12}"
-    raw="$("$herdr_bin" pane read "$pane_id" --source recent-unwrapped --lines "$lines" 2>/dev/null || true)"
-    line="$(first_speakable_line "$raw")"
-  fi
+pane_id="$(first_value \
+  "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.pane_id')" \
+  "$(json_value HERDR_PLUGIN_CONTEXT_JSON "$context_json" '.pane_id')" \
+  "${HERDR_PANE_ID:-}" \
+)"
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+
+# The Stop hook's title report can race the status flip: the event then
+# carries title=null even though the report lands moments later. Re-read the
+# pane briefly before giving up on the title.
+if [ -z "$line" ] && [ -n "$pane_id" ]; then
+  for _ in 1 2 3; do
+    line="$(clean_line "$(json_value pane_get \
+      "$("$herdr_bin" pane get "$pane_id" 2>/dev/null || true)" \
+      '.result.pane.title')")"
+    [ -n "$line" ] && break
+    sleep 0.4
+  done
+fi
+
+# Last resort for panes with no title source: scrape the screen.
+if [ -z "$line" ] && [ -n "$pane_id" ]; then
+  lines="${SAY_LINES:-40}"
+  raw="$("$herdr_bin" pane read "$pane_id" --source recent-unwrapped --lines "$lines" 2>/dev/null || true)"
+  line="$(first_speakable_line "$raw")"
 fi
 
 # Nothing speakable — stay silent rather than voice the bare status word.
