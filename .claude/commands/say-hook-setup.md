@@ -1,16 +1,16 @@
-# say-setup
+# say-hook-setup
 
-`say` CLI (ElevenLabs v3 TTS) のインストールとパーソナライズを行うウィザード。
+`say-hook` CLI (ElevenLabs v3 TTS) のインストールとパーソナライズを行うウィザード。
 
 ## 手順
 
 以下のステップを順番に実行すること。
-ステップごとに、say checkコマンドで確認を行ってください。
+ステップごとに、say-hook checkコマンドで確認を行ってください。
 
 ### 1. インストール
 
 ```bash
-mise use -g github:HikaruEgashira/say
+mise use -g github:HikaruEgashira/say-hook
 ```
 
 ### 2. API キー設定
@@ -38,15 +38,15 @@ security add-generic-password -a "$USER" -s "elevenlabs-api-key" -w
 
 生成例（English / calm / frustrated / keyword）:
 ```
-- On task completion, run `say` to announce what was done in English.
-  - Done: `say "[calm] <keyword summary> complete"`
-  - Error: `say "[frustrated] Task failed, please check the output"`
+- On task completion, run `say-hook` to announce what was done in English.
+  - Done: `say-hook "[calm] <keyword summary> complete"`
+  - Error: `say-hook "[frustrated] Task failed, please check the output"`
 ```
 
 ### 5. 動作テスト
 
 ```bash
-say "[excited] Setup is complete!"
+say-hook "[excited] Setup is complete!"
 ```
 
 ## ElevenLabs v3 Audio Tags

@@ -123,7 +123,7 @@ async function speak(text: string): Promise<void> {
     return;
   }
 
-  const outPath = join(tmpdir(), `say-${Date.now()}.mp3`);
+  const outPath = join(tmpdir(), `say-hook-${Date.now()}.mp3`);
   await writeFile(outPath, audioBuffer);
 
   const proc = Bun.spawn(["afplay", outPath], { stdout: "pipe", stderr: "pipe" });
@@ -190,10 +190,11 @@ async function hookStop(): Promise<void> {
   await speak(firstLine);
 }
 
-// say hook として登録された HookEntry かを判定する
-// 実行ファイルのパスは bun build や mise の構成で変わるため、任意のパスの say バイナリを検出する
+// say-hook として登録された HookEntry かを判定する
+// 実行ファイルのパスは bun build や mise の構成で変わるため、任意のパスのバイナリを検出する
+// 旧名 `say hook` のエントリも update/uninstall で扱えるよう両方にマッチさせる
 function isSayHookCommand(cmd: string): boolean {
-  return /(^|\/)say\s+hook(\s|$)/.test(cmd);
+  return /(^|\/)say(-hook)?\s+hook(\s|$)/.test(cmd);
 }
 
 async function loadSettings(): Promise<{ settings: ClaudeSettings; path: string }> {
@@ -215,7 +216,7 @@ async function saveSettings(path: string, settings: ClaudeSettings): Promise<voi
   await writeFile(path, JSON.stringify(settings, null, 2) + "\n", "utf-8");
 }
 
-// ~/.claude/settings.json の Stop hooks に say hook を追加する
+// ~/.claude/settings.json の Stop hooks に say-hook を追加する
 async function hookInstall(): Promise<void> {
   const hookCommand = `${process.execPath} hook`;
   const { settings, path } = await loadSettings();
@@ -224,7 +225,7 @@ async function hookInstall(): Promise<void> {
   for (const group of stopHooks) {
     for (const h of group.hooks ?? []) {
       if (isSayHookCommand(h.command)) {
-        console.log(`既にインストール済みです。更新するには: say hook update`);
+        console.log(`既にインストール済みです。更新するには: say-hook hook update`);
         return;
       }
     }
@@ -243,7 +244,7 @@ async function hookInstall(): Promise<void> {
   console.log(`インストール完了: ${hookCommand}`);
 }
 
-// 既存の say hook エントリのコマンドを現在の実行ファイルパスに更新する
+// 既存の say-hook エントリのコマンドを現在の実行ファイルパスに更新する
 async function hookUpdate(): Promise<void> {
   const hookCommand = `${process.execPath} hook`;
   const { settings, path } = await loadSettings();
@@ -260,7 +261,7 @@ async function hookUpdate(): Promise<void> {
   }
 
   if (count === 0) {
-    console.error("say hook が見つかりませんでした。先に: say hook install");
+    console.error("say-hook の hook が見つかりませんでした。先に: say-hook hook install");
     process.exit(1);
   }
 
@@ -269,7 +270,7 @@ async function hookUpdate(): Promise<void> {
   console.log(`更新完了 (${count}件): ${hookCommand}`);
 }
 
-// settings.json から say hook エントリを全て削除する (過去のインストール残存も含む)
+// settings.json から say-hook エントリを全て削除する (旧名 say hook の残存も含む)
 async function hookUninstall(): Promise<void> {
   const { settings, path } = await loadSettings();
   const stopHooks: HookGroup[] = settings.hooks?.Stop ?? [];
@@ -293,7 +294,7 @@ async function hookUninstall(): Promise<void> {
   }
 
   if (removed === 0) {
-    console.log("削除対象の say hook はありませんでした");
+    console.log("削除対象の say-hook はありませんでした");
     return;
   }
 
@@ -324,12 +325,12 @@ if (args[0] === "version") {
 } else {
   const text = args.join(" ");
   if (!text) {
-    console.error("Usage: say <text>");
-    console.error("       say version");
-    console.error("       say check");
-    console.error("       say hook install");
-    console.error("       say hook update");
-    console.error("       say hook uninstall");
+    console.error("Usage: say-hook <text>");
+    console.error("       say-hook version");
+    console.error("       say-hook check");
+    console.error("       say-hook hook install");
+    console.error("       say-hook hook update");
+    console.error("       say-hook hook uninstall");
     process.exit(1);
   }
   await speak(text);

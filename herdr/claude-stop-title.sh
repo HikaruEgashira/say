@@ -1,7 +1,7 @@
 #!/bin/sh
-# Claude Code Stop hook installed by the herdr say plugin (say-speak.sh
+# Claude Code Stop hook installed by the herdr say-hook plugin (say-hook-speak.sh
 # --install-claude-hook). Reports the final message's first line as the herdr
-# pane title, so pane.agent_status_changed carries the exact line `say hook`
+# pane title, so pane.agent_status_changed carries the exact line `say-hook hook`
 # would speak — instead of whatever the screen-scrape fallback finds.
 set -eu
 
@@ -25,4 +25,4 @@ line="$(jq -r '
 # TTL keeps a finished turn's title from being spoken for a later, unrelated
 # blocked event; done fires within seconds of Stop, well inside the window.
 "$herdr_bin" pane report-metadata "$HERDR_PANE_ID" \
-  --source herdr:say --title "$line" --ttl-ms 120000 >/dev/null 2>&1 || true
+  --source herdr:say-hook --title "$line" --ttl-ms 120000 >/dev/null 2>&1 || true

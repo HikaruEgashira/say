@@ -94,10 +94,10 @@ first_speakable_line() {
 
 speak() {
   line="$1"
-  say_bin="${SAY_BIN:-say}"
+  say_bin="${SAY_BIN:-say-hook}"
 
   if ! command_exists "$say_bin"; then
-    echo "say binary not found: $say_bin (set SAY_BIN or install github:HikaruEgashira/say)" >&2
+    echo "say-hook binary not found: $say_bin (set SAY_BIN or install github:HikaruEgashira/say-hook)" >&2
     return 1
   fi
 
@@ -108,17 +108,17 @@ dry_run() {
   load_env
 
   ok=1
-  say_bin="${SAY_BIN:-say}"
+  say_bin="${SAY_BIN:-say-hook}"
   statuses="${SAY_STATUSES:-done blocked}"
   lines="${SAY_LINES:-40}"
 
-  echo "Say plugin dry-run"
+  echo "say-hook plugin dry-run"
   echo
 
   if command_exists "$say_bin"; then
-    echo "say: ok ($say_bin)"
+    echo "say-hook: ok ($say_bin)"
   else
-    echo "say: missing ($say_bin); set SAY_BIN or install github:HikaruEgashira/say"
+    echo "say-hook: missing ($say_bin); set SAY_BIN or install github:HikaruEgashira/say-hook"
     ok=0
   fi
 
@@ -132,7 +132,7 @@ dry_run() {
   echo "SAY_STATUSES: $statuses"
   echo "SAY_LINES: $lines"
 
-  hook_path="$HOME/.claude/hooks/herdr-say-title.sh"
+  hook_path="$HOME/.claude/hooks/herdr-say-hook-title.sh"
   if [ -f "$hook_path" ]; then
     echo "claude Stop hook: ok ($hook_path)"
   else
@@ -141,7 +141,7 @@ dry_run() {
 
   echo
   echo "Sample spoken line:"
-  echo "Implemented the say plugin and pushed the branch."
+  echo "Implemented the say-hook plugin and pushed the branch."
 
   if [ "$ok" -eq 1 ]; then
     echo
@@ -157,18 +157,18 @@ dry_run() {
 test_speak() {
   load_env
 
-  say_bin="${SAY_BIN:-say}"
-  echo "Say plugin test"
+  say_bin="${SAY_BIN:-say-hook}"
+  echo "say-hook plugin test"
   echo
 
   if ! command_exists "$say_bin"; then
-    echo "say: missing ($say_bin)"
+    echo "say-hook: missing ($say_bin)"
     echo
     echo "Result: failed"
     return 1
   fi
 
-  line="This is a test line from the Herdr say plugin."
+  line="This is a test line from the Herdr say-hook plugin."
   echo "Speaking:"
   echo "$line"
   echo
@@ -186,7 +186,7 @@ test_speak() {
 # register it as a Claude Code Stop hook. Idempotent.
 install_claude_hook() {
   src="${HERDR_PLUGIN_ROOT:-.}/claude-stop-title.sh"
-  hook_path="$HOME/.claude/hooks/herdr-say-title.sh"
+  hook_path="$HOME/.claude/hooks/herdr-say-hook-title.sh"
   settings="$HOME/.claude/settings.json"
 
   if ! command_exists jq; then
@@ -265,7 +265,7 @@ done
 [ "$matched" -eq 1 ] || exit 0
 
 # Primary source: the pane title — for Claude panes, claude-stop-title.sh
-# reports the final message's first line here, the exact line `say hook`
+# reports the final message's first line here, the exact line `say-hook hook`
 # would speak. This is what pane.agent_status_changed carries.
 line="$(clean_line "$(first_value \
   "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.title')" \

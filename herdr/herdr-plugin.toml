@@ -1,25 +1,25 @@
-id = "hikaruegashira.say"
-name = "Say"
-version = "0.2.0"
+id = "hikaruegashira.say-hook"
+name = "Say Hook"
+version = "0.3.0"
 min_herdr_version = "0.7.0"
-description = "Speak the agent's first line aloud via the say CLI when a Herdr agent finishes or gets blocked."
+description = "Speak the agent's first line aloud via the say-hook CLI when a Herdr agent finishes or gets blocked."
 platforms = ["macos"]
 
 [[events]]
 on = "pane.agent_status_changed"
-command = ["sh", "say-speak.sh"]
+command = ["sh", "say-hook-speak.sh"]
 
 [[actions]]
 id = "install-claude-hook"
 title = "Install Claude Hook"
-command = ["sh", "say-speak.sh", "--install-claude-hook"]
+command = ["sh", "say-hook-speak.sh", "--install-claude-hook"]
 
 [[actions]]
 id = "dry-run"
 title = "Dry Run"
-command = ["sh", "say-speak.sh", "--dry-run"]
+command = ["sh", "say-hook-speak.sh", "--dry-run"]
 
 [[actions]]
 id = "test"
 title = "Speak Test Line"
-command = ["sh", "say-speak.sh", "--test"]
+command = ["sh", "say-hook-speak.sh", "--test"]

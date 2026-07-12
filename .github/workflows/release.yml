@@ -34,18 +34,18 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           REF_NAME: ${{ github.ref_name }}
-        run: bun build --compile --target="$BUILD_TARGET" --define __VERSION__="\"$REF_NAME\"" --outfile=say index.ts
+        run: bun build --compile --target="$BUILD_TARGET" --define __VERSION__="\"$REF_NAME\"" --outfile=say-hook index.ts
       - name: Archive
         timeout-minutes: 5
         env:
           REF_NAME: ${{ github.ref_name }}
           SUFFIX: ${{ matrix.suffix }}
-        run: tar czf "say-${REF_NAME}-${SUFFIX}.tar.gz" say
+        run: tar czf "say-hook-${REF_NAME}-${SUFFIX}.tar.gz" say-hook
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         timeout-minutes: 5
         with:
-          name: say-${{ matrix.suffix }}
-          path: say-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz
+          name: say-hook-${{ matrix.suffix }}
+          path: say-hook-${{ github.ref_name }}-${{ matrix.suffix }}.tar.gz
   release:
     needs: build
     timeout-minutes: 5

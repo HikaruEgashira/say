@@ -1,17 +1,17 @@
-# say
+# say-hook
 
-A CLI that replaces the system `say` command using [ElevenLabs](https://elevenlabs.io) V3 Text-to-Speech.
+A CLI and Claude Code Stop hook that speaks text aloud using [ElevenLabs](https://elevenlabs.io) V3 Text-to-Speech, falling back to the system `say` command.
 
 demo: https://screen.studio/share/sl41XjhC?state=uploading
 
 ## Install
 
 ```bash
-mise use github:HikaruEgashira/say
+mise use github:HikaruEgashira/say-hook
 ```
 
 ```claude
-setup following instruction https://raw.githubusercontent.com/HikaruEgashira/say/refs/heads/main/.claude/commands/say-setup.md
+setup following instruction https://raw.githubusercontent.com/HikaruEgashira/say-hook/refs/heads/main/.claude/commands/say-hook-setup.md
 ```
 
 ## Configuration
@@ -34,7 +34,7 @@ Optional environment variables:
 ## Usage
 
 ```bash
-say "Hello, world!"
+say-hook "Hello, world!"
 ```
 
 ## Herdr plugin
@@ -45,7 +45,7 @@ voice counterpart to a push notification when you run several agent panes in
 parallel.
 
 ```bash
-herdr plugin install HikaruEgashira/say/herdr
+herdr plugin install HikaruEgashira/say-hook/herdr
 ```
 
 See [herdr/README.md](herdr/README.md) for configuration.
