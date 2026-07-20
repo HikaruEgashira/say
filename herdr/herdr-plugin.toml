@@ -1,8 +1,8 @@
 id = "hikaruegashira.say-hook"
 name = "Say Hook"
-version = "0.3.0"
+version = "0.4.0"
 min_herdr_version = "0.7.0"
-description = "Speak the agent's first line aloud via the say-hook CLI when a Herdr agent finishes or gets blocked."
+description = "Speak the agent's opening excerpt via say-hook when a Herdr agent finishes or gets blocked."
 platforms = ["macos"]
 
 [[events]]

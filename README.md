@@ -28,8 +28,11 @@ Optional environment variables:
 |---|---|
 | `ELEVENLABS_VOICE_ID` | Voice ID (default: `JBFqnCBsd6RMkjVDRZzb`) |
 | `ELEVENLABS_SPEED` | Speech speed multiplier (default: `1.3`) |
-| `SAY_MAX_CHARS` | Max characters sent to TTS (default: `200`) |
+| `SAY_MAX_CHARS` | Max characters sent to TTS (default and hard limit: `200`) |
 | `SAY_MAX_SECONDS` | Max playback duration in seconds (default: `30`) |
+
+The Stop hook speaks through the first `.`, `,`, or `。`, including that
+delimiter, and never exceeds `SAY_MAX_CHARS`.
 
 ## Usage
 
@@ -40,7 +43,7 @@ say-hook "Hello, world!"
 ## Herdr plugin
 
 [`herdr/`](herdr/) is a [Herdr](https://herdr.dev/) plugin that speaks an
-agent's one-line task summary aloud when it reaches `done` or `blocked` — the
+agent's opening excerpt aloud when it reaches `done` or `blocked` — the
 voice counterpart to a push notification when you run several agent panes in
 parallel.
 
