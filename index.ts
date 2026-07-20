@@ -8,6 +8,9 @@ import { configuredVoice, describeVoice, voiceMatchesExpectation } from "./voice
 /** bun build --define で埋め込まれるバージョン文字列。未定義時は dev */
 declare const __VERSION__: string;
 const VERSION = typeof __VERSION__ !== "undefined" ? __VERSION__ : "dev";
+const SECURITY_BIN = "/usr/bin/security";
+const AFPLAY_BIN = "/usr/bin/afplay";
+const SYSTEM_SAY_BIN = "/usr/bin/say";
 
 // Claude Code settings.json のスキーマ
 // https://docs.anthropic.com/en/docs/claude-code/hooks
@@ -50,7 +53,7 @@ interface StopHookInput {
 
 function getApiKey(): string {
   const result = Bun.spawnSync([
-    "security", "find-generic-password",
+    SECURITY_BIN, "find-generic-password",
     "-a", process.env.USER ?? "",
     "-s", "elevenlabs-api-key",
     "-w",
@@ -65,7 +68,7 @@ function getApiKey(): string {
 const DEFAULT_MAX_SECONDS = 30;
 
 function sayFallback(message: string): void {
-  Bun.spawnSync(["/usr/bin/say", message], { stderr: "pipe" });
+  Bun.spawnSync([SYSTEM_SAY_BIN, message], { stderr: "pipe" });
 }
 
 async function extractErrorMessage(e: unknown): Promise<string> {
@@ -101,8 +104,6 @@ async function speak(text: string): Promise<void> {
 
   const speed = process.env.ELEVENLABS_SPEED ? parseFloat(process.env.ELEVENLABS_SPEED) : 1.3;
 
-  // ElevenLabs の API 呼び出しからストリーム読み取りまでを1つの try で包み、
-  // いずれのタイミングで失敗しても /usr/bin/say にフォールバックする
   let audioBuffer: Buffer;
   try {
     const audio = await client.textToSpeech.convert(voiceId, {
@@ -118,7 +119,7 @@ async function speak(text: string): Promise<void> {
     audioBuffer = Buffer.concat(chunks);
   } catch (e) {
     const msg = await extractErrorMessage(e);
-    console.error(`${msg}; falling back to /usr/bin/say`);
+    console.error(`${msg}; falling back to ${SYSTEM_SAY_BIN}`);
     sayFallback(truncated);
     return;
   }
@@ -126,7 +127,7 @@ async function speak(text: string): Promise<void> {
   const outPath = join(tmpdir(), `say-hook-${Date.now()}.mp3`);
   await writeFile(outPath, audioBuffer);
 
-  const proc = Bun.spawn(["afplay", outPath], { stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn([AFPLAY_BIN, outPath], { stdout: "pipe", stderr: "pipe" });
   const timer = setTimeout(() => proc.kill(), maxSeconds * 1000);
   try {
     await proc.exited;
@@ -141,7 +142,7 @@ async function check(): Promise<void> {
   const results: CheckResult[] = [];
 
   const keychainResult = Bun.spawnSync([
-    "security", "find-generic-password",
+    SECURITY_BIN, "find-generic-password",
     "-a", process.env.USER ?? "",
     "-s", "elevenlabs-api-key",
     "-w",
@@ -177,12 +178,11 @@ async function check(): Promise<void> {
     results.push({ label: "ElevenLabs voice", ok: false, detail: `not checked (${voiceConfig.id})` });
   }
 
-  const afplayResult = Bun.spawnSync(["which", "afplay"], { stderr: "pipe" });
-  const afplayOk = afplayResult.exitCode === 0;
+  const afplayOk = await Bun.file(AFPLAY_BIN).exists();
   results.push({
     label: "afplay (macOS)",
     ok: afplayOk,
-    detail: afplayOk ? afplayResult.stdout.toString().trim() : "not found",
+    detail: afplayOk ? AFPLAY_BIN : "not found",
   });
 
   for (const r of results) {
