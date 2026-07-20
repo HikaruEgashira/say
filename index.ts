@@ -3,6 +3,7 @@ import { writeFile, readFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
 import { maxSpeechChars, selectSpeechText, truncateSpeechText } from "./speech-text";
+import { configuredVoice, describeVoice, voiceMatchesExpectation } from "./voice";
 
 /** bun build --define で埋め込まれるバージョン文字列。未定義時は dev */
 declare const __VERSION__: string;
@@ -95,7 +96,7 @@ async function speak(text: string): Promise<void> {
 
   const apiKey = getApiKey();
 
-  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "JBFqnCBsd6RMkjVDRZzb";
+  const voiceId = configuredVoice(process.env.ELEVENLABS_VOICE_ID, process.env.ELEVENLABS_VOICE_NAME).id;
   const client = new ElevenLabsClient({ apiKey });
 
   const speed = process.env.ELEVENLABS_SPEED ? parseFloat(process.env.ELEVENLABS_SPEED) : 1.3;
@@ -117,7 +118,7 @@ async function speak(text: string): Promise<void> {
     audioBuffer = Buffer.concat(chunks);
   } catch (e) {
     const msg = await extractErrorMessage(e);
-    console.error(msg);
+    console.error(`${msg}; falling back to /usr/bin/say`);
     sayFallback(truncated);
     return;
   }
@@ -135,7 +136,7 @@ async function speak(text: string): Promise<void> {
   }
 }
 
-function check(): void {
+async function check(): Promise<void> {
   type CheckResult = { label: string; ok: boolean; detail: string };
   const results: CheckResult[] = [];
 
@@ -145,12 +146,36 @@ function check(): void {
     "-s", "elevenlabs-api-key",
     "-w",
   ], { stderr: "pipe" });
-  const keychainOk = keychainResult.exitCode === 0 && keychainResult.stdout.toString().trim().length > 0;
+  const apiKey = keychainResult.stdout.toString().trim();
+  const keychainOk = keychainResult.exitCode === 0 && apiKey.length > 0;
   results.push({
     label: "elevenlabs-api-key (Keychain)",
     ok: keychainOk,
     detail: keychainOk ? "found" : "not found",
   });
+
+  const voiceConfig = configuredVoice(process.env.ELEVENLABS_VOICE_ID, process.env.ELEVENLABS_VOICE_NAME);
+  if (keychainOk) {
+    try {
+      const client = new ElevenLabsClient({ apiKey });
+      const voice = await client.voices.get(voiceConfig.id, undefined, { timeoutInSeconds: 5, maxRetries: 0 });
+      const voiceMatches = voiceMatchesExpectation(voiceConfig, voice);
+      results.push({
+        label: "ElevenLabs voice",
+        ok: voiceMatches,
+        detail: describeVoice(voiceConfig, voice),
+      });
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      const reason = statusCode === 401 ? "authentication failed"
+        : statusCode === 404 ? "not found"
+          : (error as { name?: string }).name === "TimeoutError" ? "lookup timed out"
+            : "lookup failed";
+      results.push({ label: "ElevenLabs voice", ok: false, detail: `${reason} (${voiceConfig.id})` });
+    }
+  } else {
+    results.push({ label: "ElevenLabs voice", ok: false, detail: `not checked (${voiceConfig.id})` });
+  }
 
   const afplayResult = Bun.spawnSync(["which", "afplay"], { stderr: "pipe" });
   const afplayOk = afplayResult.exitCode === 0;
@@ -160,13 +185,11 @@ function check(): void {
     detail: afplayOk ? afplayResult.stdout.toString().trim() : "not found",
   });
 
-  let allOk = true;
   for (const r of results) {
     console.log(`${r.ok ? "✓" : "✗"} ${r.label}: ${r.detail}`);
-    if (!r.ok) allOk = false;
   }
 
-  process.exit(allOk ? 0 : 1);
+  process.exit(results.every((result) => result.ok) ? 0 : 1);
 }
 
 async function hookStop(): Promise<void> {
@@ -310,7 +333,7 @@ const args = process.argv.slice(2);
 if (args[0] === "version") {
   console.log(VERSION);
 } else if (args[0] === "check") {
-  check();
+  await check();
 } else if (args[0] === "hook" && args[1] === "install") {
   await hookInstall();
 } else if (args[0] === "hook" && args[1] === "update") {

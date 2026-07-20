@@ -113,6 +113,66 @@ describe("Herdr integration", () => {
     expect(await readFile(capture, "utf8")).toContain("完了しました。");
   });
 
+  test("identifies the configured voice before the Herdr test speaks", async () => {
+    const { directory, sayHook } = await fixture();
+    const capture = join(directory, "say-hook.args");
+    await writeFile(sayHook, `#!/bin/sh
+printf '%s\n' "$1" >> "$SAY_HOOK_CAPTURE"
+if [ "$1" = check ]; then
+  echo '✓ ElevenLabs voice: Yui'
+fi
+`);
+    await chmod(sayHook, 0o755);
+
+    const process = Bun.spawnSync(["sh", "herdr/say-hook-speak.sh", "--test"], {
+      env: { ...Bun.env, SAY_BIN: sayHook, SAY_HOOK_CAPTURE: capture },
+    });
+    expect(process.exitCode).toBe(0);
+    expect(process.stdout.toString()).toContain("ElevenLabs voice: Yui");
+    expect((await readFile(capture, "utf8")).trim().split("\n")).toEqual([
+      "check",
+      "This is a test line from the Herdr say-hook plugin.",
+    ]);
+  });
+
+  test("does not speak when the configured voice check fails", async () => {
+    const { directory, sayHook } = await fixture();
+    const capture = join(directory, "say-hook.args");
+    await writeFile(sayHook, `#!/bin/sh
+printf '%s\n' "$1" >> "$SAY_HOOK_CAPTURE"
+[ "$1" != check ]
+`);
+    await chmod(sayHook, 0o755);
+
+    const process = Bun.spawnSync(["sh", "herdr/say-hook-speak.sh", "--test"], {
+      env: { ...Bun.env, SAY_BIN: sayHook, SAY_HOOK_CAPTURE: capture },
+    });
+    expect(process.exitCode).toBe(1);
+    expect((await readFile(capture, "utf8")).trim()).toBe("check");
+    expect(process.stdout.toString()).not.toContain("Speaking:");
+  });
+
+  test("checks the voice from the effective Herdr environment", async () => {
+    const { directory, sayHook } = await fixture();
+    const config = join(directory, "config");
+    const capture = join(directory, "voice.txt");
+    await mkdir(config);
+    await writeFile(join(config, ".env"), `SAY_BIN='${sayHook}'
+ELEVENLABS_VOICE_ID=voice-id
+ELEVENLABS_VOICE_NAME='Chosen Voice'
+`);
+    await writeFile(sayHook, `#!/bin/sh
+printf '%s|%s|%s' "$1" "$ELEVENLABS_VOICE_ID" "$ELEVENLABS_VOICE_NAME" > "$SAY_HOOK_CAPTURE"
+`);
+    await chmod(sayHook, 0o755);
+
+    const process = Bun.spawnSync(["sh", "herdr/say-hook-speak.sh", "--check"], {
+      env: { ...Bun.env, HERDR_PLUGIN_CONFIG_DIR: config, SAY_HOOK_CAPTURE: capture },
+    });
+    expect(process.exitCode).toBe(0);
+    expect(await readFile(capture, "utf8")).toBe("check|voice-id|Chosen Voice");
+  });
+
   test("joins unanchored screen rows before selecting the excerpt", async () => {
     const { directory, herdr, sayHook } = await fixture();
     const capture = join(directory, "spoken.txt");

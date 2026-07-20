@@ -56,6 +56,8 @@ $EDITOR "$config_dir/.env"
 | `SAY_BIN` | Path to the `say-hook` binary | `say-hook` |
 | `SAY_STATUSES` | Statuses that trigger speech (space-separated) | `done blocked` |
 | `SAY_LINES` | Recent pane lines scanned by the screen-scrape fallback | `40` |
+| `ELEVENLABS_VOICE_ID` | Voice ID passed to `say-hook` | Yui |
+| `ELEVENLABS_VOICE_NAME` | Expected voice name checked against the ID | Yui |
 
 ## dry-run
 
@@ -68,10 +70,18 @@ herdr plugin log list --plugin hikaruegashira.say-hook --limit 1 | jq -r '.resul
 
 ## test
 
-Speaks a real test line through `say-hook`.
+Checks the configured voice identity, then speaks a real test line through
+`say-hook`.
 
 ```sh
 herdr plugin action invoke test
+```
+
+Use the non-speaking check when only the effective voice identity needs
+verification:
+
+```sh
+herdr plugin action invoke check
 ```
 
 ## Local development

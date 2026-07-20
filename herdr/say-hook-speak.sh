@@ -4,14 +4,19 @@ set -eu
 # .env from the plugin config dir takes precedence; ./.env is a local-dev fallback.
 load_env() {
   local_env="${HERDR_PLUGIN_ROOT:-.}/.env"
+  env_file=""
 
   if [ -n "${HERDR_PLUGIN_CONFIG_DIR:-}" ] && [ -f "$HERDR_PLUGIN_CONFIG_DIR/.env" ]; then
-    # shellcheck disable=SC1090
-    . "$HERDR_PLUGIN_CONFIG_DIR/.env"
+    env_file="$HERDR_PLUGIN_CONFIG_DIR/.env"
   elif [ -f "$local_env" ]; then
-    # shellcheck disable=SC1090
-    . "$local_env"
+    env_file="$local_env"
   fi
+
+  [ -n "$env_file" ] || return 0
+  set -a
+  # shellcheck disable=SC1090
+  . "$env_file"
+  set +a
 }
 
 json_value() {
@@ -160,18 +165,16 @@ dry_run() {
 }
 
 test_speak() {
-  load_env
-
-  say_bin="${SAY_BIN:-say-hook}"
   echo "say-hook plugin test"
   echo
 
-  if ! command_exists "$say_bin"; then
-    echo "say-hook: missing ($say_bin)"
+  if ! check_say_hook; then
     echo
     echo "Result: failed"
     return 1
   fi
+
+  echo
 
   line="This is a test line from the Herdr say-hook plugin."
   echo "Speaking:"
@@ -185,6 +188,16 @@ test_speak() {
 
   echo "Result: failed"
   return 1
+}
+
+check_say_hook() {
+  load_env
+  say_bin="${SAY_BIN:-say-hook}"
+  command_exists "$say_bin" || {
+    echo "say-hook: missing ($say_bin)"
+    return 1
+  }
+  "$say_bin" check
 }
 
 # Copy claude-stop-title.sh next to herdr's own claude integration hook and
@@ -242,6 +255,11 @@ fi
 
 if [ "${1:-}" = "--test" ]; then
   test_speak
+  exit $?
+fi
+
+if [ "${1:-}" = "--check" ]; then
+  check_say_hook
   exit $?
 fi
 
