@@ -26,7 +26,8 @@ Optional environment variables:
 
 | Variable | Description |
 |---|---|
-| `ELEVENLABS_VOICE_ID` | Voice ID (default: `JBFqnCBsd6RMkjVDRZzb`) |
+| `ELEVENLABS_VOICE_ID` | Voice ID (default: Yui, `fUjY9K2nAIwlALOwSiwc`) |
+| `ELEVENLABS_VOICE_NAME` | Expected voice name; `check` fails on an ID/name mismatch |
 | `ELEVENLABS_SPEED` | Speech speed multiplier (default: `1.3`) |
 | `SAY_MAX_CHARS` | Max characters sent to TTS (default and hard limit: `200`) |
 | `SAY_MAX_SECONDS` | Max playback duration in seconds (default: `30`) |
