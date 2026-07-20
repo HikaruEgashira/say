@@ -1,6 +1,6 @@
 id = "hikaruegashira.say-hook"
 name = "Say Hook"
-version = "0.4.1"
+version = "0.4.2"
 min_herdr_version = "0.7.0"
 description = "Speak the agent's opening excerpt via say-hook when a Herdr agent finishes or gets blocked."
 platforms = ["macos"]

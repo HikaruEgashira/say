@@ -1,6 +1,6 @@
 # say-hook
 
-A CLI and Claude Code Stop hook that speaks text aloud using [ElevenLabs](https://elevenlabs.io) V3 Text-to-Speech, falling back to the system `say` command.
+A macOS CLI and Claude Code Stop hook that speaks text aloud using [ElevenLabs](https://elevenlabs.io) V3 Text-to-Speech, falling back to the system `say` command.
 
 demo: https://screen.studio/share/sl41XjhC?state=uploading
 
