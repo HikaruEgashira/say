@@ -1,6 +1,9 @@
 name: Release
 on:
+  pull_request:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 permissions: {}
@@ -20,6 +23,7 @@ jobs:
       - timeout-minutes: 5
         run: bun test && bun run typecheck
   build:
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: test
     strategy:
       matrix:
