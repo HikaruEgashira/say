@@ -1,17 +1,17 @@
 # say-hook — Herdr plugin
 
-A [Herdr](https://herdr.dev/) plugin that speaks the agent's first output line
+A [Herdr](https://herdr.dev/) plugin that speaks the agent's opening excerpt
 aloud via the [`say-hook`](../README.md) CLI when an agent reaches `done` or
 `blocked`. It is the voice counterpart to a push notification: with several
 agent panes running in parallel, you hear which one just finished or got stuck
 without watching every pane.
 
-The standard line selection matches `say-hook hook`: choose the first non-empty
-line of the agent's final message. Sources, in order:
+The standard selection matches `say-hook hook`: normalize whitespace, stop at
+the first `.`, `,`, or `。` (including it), and cap output at 200 characters.
+Sources, in order:
 
 1. **Pane title** — with the Claude hook installed (see below), a Claude Code
-   Stop hook reports the final message's first line as the herdr pane title:
-   the exact line `say-hook hook` would speak.
+   Stop hook reports the same excerpt as the herdr pane title.
 2. **Screen scrape** — for panes with no title, the pane is read and the last
    ⏺-anchored message head is spoken after stripping terminal escape
    sequences and chrome. This is best-effort: a long message can scroll its
@@ -33,7 +33,7 @@ herdr plugin install HikaruEgashira/say-hook/herdr
 ```
 
 For Claude Code panes, also install the Stop hook so speech uses the final
-message's first line instead of screen scraping:
+message excerpt instead of screen scraping:
 
 ```sh
 herdr plugin action invoke install-claude-hook

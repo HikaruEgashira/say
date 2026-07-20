@@ -2,6 +2,7 @@ import { ElevenLabsClient } from "elevenlabs";
 import { writeFile, readFile, unlink } from "fs/promises";
 import { join } from "path";
 import { tmpdir, homedir } from "os";
+import { maxSpeechChars, selectSpeechText, truncateSpeechText } from "./speech-text";
 
 /** bun build --define で埋め込まれるバージョン文字列。未定義時は dev */
 declare const __VERSION__: string;
@@ -60,7 +61,6 @@ function getApiKey(): string {
   process.exit(1);
 }
 
-const DEFAULT_MAX_CHARS = 200;
 const DEFAULT_MAX_SECONDS = 30;
 
 function sayFallback(message: string): void {
@@ -90,9 +90,8 @@ async function extractErrorMessage(e: unknown): Promise<string> {
 }
 
 async function speak(text: string): Promise<void> {
-  const maxChars = process.env.SAY_MAX_CHARS ? parseInt(process.env.SAY_MAX_CHARS, 10) : DEFAULT_MAX_CHARS;
   const maxSeconds = process.env.SAY_MAX_SECONDS ? parseFloat(process.env.SAY_MAX_SECONDS) : DEFAULT_MAX_SECONDS;
-  const truncated = text.length > maxChars ? text.slice(0, maxChars) : text;
+  const truncated = truncateSpeechText(text, maxSpeechChars(process.env.SAY_MAX_CHARS));
 
   const apiKey = getApiKey();
 
@@ -170,7 +169,6 @@ function check(): void {
   process.exit(allOk ? 0 : 1);
 }
 
-// Claude Code Stop hook: stdinのJSONからlast_assistant_messageの先頭行を読んで発話
 async function hookStop(): Promise<void> {
   const input = await Bun.stdin.text();
   let data: StopHookInput;
@@ -183,11 +181,10 @@ async function hookStop(): Promise<void> {
 
   if (data.stop_hook_active) process.exit(0);
 
-  const message = data.last_assistant_message ?? "";
-  const firstLine = message.split("\n").map((l) => l.trim()).find((l) => l.length > 0);
-  if (!firstLine) process.exit(0);
+  const text = selectSpeechText(data.last_assistant_message ?? "", maxSpeechChars(process.env.SAY_MAX_CHARS));
+  if (!text) process.exit(0);
 
-  await speak(firstLine);
+  await speak(text);
 }
 
 // say-hook として登録された HookEntry かを判定する
@@ -322,12 +319,17 @@ if (args[0] === "version") {
   await hookUninstall();
 } else if (args[0] === "hook") {
   await hookStop();
+} else if (args[0] === "excerpt") {
+  const input = args.length > 1 ? args.slice(1).join(" ") : await Bun.stdin.text();
+  const text = selectSpeechText(input, maxSpeechChars(process.env.SAY_MAX_CHARS));
+  if (text) console.log(text);
 } else {
   const text = args.join(" ");
   if (!text) {
     console.error("Usage: say-hook <text>");
     console.error("       say-hook version");
     console.error("       say-hook check");
+    console.error("       say-hook excerpt [text]");
     console.error("       say-hook hook install");
     console.error("       say-hook hook update");
     console.error("       say-hook hook uninstall");

@@ -50,15 +50,14 @@ clean_line() {
 }
 
 # Fallback for panes with no title: reduce raw terminal output to the head of
-# the last agent message, matching the Claude Code Stop hook standard. Done
-# entirely in perl (-CSD) — macOS awk's
+# the last agent message. Done entirely in perl (-CSD) — macOS awk's
 # multibyte string compare is broken (it reports "実装" == "❯" as true) and BSD
 # sed can't match \e/\a. Strips ANSI/OSC escapes and control bytes, drops
 # terminal chrome — box borders, footer, prompts, tool-use/timing/recap lines —
-# then prefers the last ⏺-anchored line: its first visual row is the message
-# head. A window starting mid-message still yields a tail fragment; the
+# then prefers the last ⏺-anchored message and joins its visual rows. A window
+# starting mid-message still yields a tail fragment; the
 # claude-stop-title.sh hook path avoids scraping entirely.
-first_speakable_line() {
+speakable_message() {
   printf '%s' "$1" | perl -CSD -e '
     local $/; my $t = <STDIN>;
     $t =~ s/\e\][^\a]*(?:\a|\e\\)//g;
@@ -84,11 +83,12 @@ first_speakable_line() {
     exit 0 unless @lines;
     for my $i (reverse 0 .. $#lines) {
       if ($lines[$i] =~ /^\x{23FA} ?(.+)/) {         # last agent message (⏺)
-        print $1;
+        my @message = ($1, @lines[$i + 1 .. $#lines]);
+        print join q{ }, @message;
         exit 0;
       }
     }
-    print $lines[0];
+    print join q{ }, @lines;
   '
 }
 
@@ -102,6 +102,11 @@ speak() {
   fi
 
   "$say_bin" "$line"
+}
+
+excerpt() {
+  say_bin="${SAY_BIN:-say-hook}"
+  printf '%s' "$1" | "$say_bin" excerpt
 }
 
 dry_run() {
@@ -136,7 +141,7 @@ dry_run() {
   if [ -f "$hook_path" ]; then
     echo "claude Stop hook: ok ($hook_path)"
   else
-    echo "claude Stop hook: not installed (run the Install Claude Hook action for exact first-line speech)"
+    echo "claude Stop hook: not installed (run the Install Claude Hook action for exact excerpt speech)"
   fi
 
   echo
@@ -188,6 +193,7 @@ install_claude_hook() {
   src="${HERDR_PLUGIN_ROOT:-.}/claude-stop-title.sh"
   hook_path="$HOME/.claude/hooks/herdr-say-hook-title.sh"
   settings="$HOME/.claude/settings.json"
+  say_bin="${SAY_BIN:-say-hook}"
 
   if ! command_exists jq; then
     echo "jq is required"
@@ -203,18 +209,16 @@ install_claude_hook() {
   chmod +x "$hook_path"
   echo "installed: $hook_path"
 
-  cmd="sh '$hook_path'"
+  say_bin_arg="$(jq -rn --arg value "$say_bin" '$value | @sh')"
+  hook_path_arg="$(jq -rn --arg value "$hook_path" '$value | @sh')"
+  cmd="env SAY_BIN=$say_bin_arg sh $hook_path_arg"
   [ -f "$settings" ] || printf '{}\n' > "$settings"
-  if jq -e --arg cmd "$cmd" \
-    '.hooks.Stop[]?.hooks[]? | select(.command == $cmd)' \
-    "$settings" >/dev/null 2>&1; then
-    echo "Stop hook already registered in $settings"
-    return 0
-  fi
-
   tmp="$(mktemp)"
-  if jq --arg cmd "$cmd" \
-    '.hooks.Stop = ((.hooks.Stop // []) + [{matcher: "*", hooks: [{type: "command", command: $cmd, async: true}]}])' \
+  if jq --arg cmd "$cmd" --arg hook_path "$hook_path" \
+    '.hooks.Stop = ([.hooks.Stop[]?
+      | .hooks = [.hooks[]? | select(((.command // "") | contains($hook_path)) | not)]
+      | select((.hooks | length) > 0)]
+      + [{matcher: "*", hooks: [{type: "command", command: $cmd, async: true}]}])' \
     "$settings" > "$tmp"; then
     mv "$tmp" "$settings"
     echo "registered Stop hook in $settings"
@@ -264,9 +268,7 @@ for s in $statuses; do
 done
 [ "$matched" -eq 1 ] || exit 0
 
-# Primary source: the pane title — for Claude panes, claude-stop-title.sh
-# reports the final message's first line here, the exact line `say-hook hook`
-# would speak. This is what pane.agent_status_changed carries.
+# Primary source: the pane title reported by claude-stop-title.sh.
 line="$(clean_line "$(first_value \
   "$(json_value HERDR_PLUGIN_EVENT_JSON "$event_json" '.data.title')" \
   "$(json_value HERDR_PLUGIN_CONTEXT_JSON "$context_json" '.title')" \
@@ -296,10 +298,13 @@ fi
 if [ -z "$line" ] && [ -n "$pane_id" ]; then
   lines="${SAY_LINES:-40}"
   raw="$("$herdr_bin" pane read "$pane_id" --source recent-unwrapped --lines "$lines" 2>/dev/null || true)"
-  line="$(first_speakable_line "$raw")"
+  line="$(speakable_message "$raw")"
 fi
 
 # Nothing speakable — stay silent rather than voice the bare status word.
+[ -n "$line" ] || exit 0
+
+line="$(excerpt "$line")"
 [ -n "$line" ] || exit 0
 
 speak "$line"
